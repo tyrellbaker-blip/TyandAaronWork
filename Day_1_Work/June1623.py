@@ -9,6 +9,13 @@ class bank_account:
         print(f"Thank you for depositing, your deposit amount was "
               f"${amount}.")
 
+    #TODO: Implement the withdrawal and display functions. Withdrawal should
+    # first ask the user how much money they want to withdraw and then
+    # withdraw it from their balance.
+
+    #TODO: Implement the display function, which prints the balance for the
+    # user.
+
 
 def main():
     # This is a comment, has no impact on our code
