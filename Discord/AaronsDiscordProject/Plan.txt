@@ -1,0 +1,33 @@
+Main.py
+-----------------------------------------------
+Has the main code for the bot and we're going to handle events here as well.
+
+1. Imports
+2. Create Token
+3. Create Bot object
+4. Let the user know that the bot is ready if the bot load is successful
+5. Run the bot
+---------------------------------------------------------------------------
+Register.py
+---------------------------------------------------------------------------
+implement the username command as well as create the database. We'll be using
+the built in sqlite database. The username command is responsible for registering
+a user and storing their information
+
+1. Imports
+2. Create the connection and cursor for the database
+3. Create a register function that sends info into the database
+4. Make sure to await the next command AND CLOSE THE DATABASE.
+---------------------------------------------------------------------------
+Points.py
+---------------------------------------------------------------------------
+Retrieves and updates points for a registered user
+
+1. Imports
+2. Create the connection and cursor for the database
+3. Create the points command
+4. Create a points function that:
+    - Create a username variable with the ctx class
+    - Fetch the result from the database
+    - Data validation -- if the user is not registered, say so. Otherwise, return
+                        the points and exit the database.
