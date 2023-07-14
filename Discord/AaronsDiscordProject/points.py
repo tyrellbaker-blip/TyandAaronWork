@@ -16,5 +16,3 @@ class Points(commands.Cog):
             await ctx.send(f"{username} has {user[1]} points.")
 
 
-def setup(bot):
-    bot.add_cog(Points(bot))
