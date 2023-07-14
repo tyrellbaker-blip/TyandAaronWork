@@ -1,4 +1,5 @@
 import os
+import dotenv
 from dotenv import load_dotenv
 import sqlite3
 from discord.ext import commands
@@ -24,4 +25,4 @@ intents = discord.Intents.default()
 bot = MyBot(command_prefix='!', intents=intents)
 bot.load_extension('register')
 bot.load_extension('points')
-bot.run(os.getenv('TY_TOKEN'))
+bot.run(os.getenv('DISCORD_TOKEN'))
