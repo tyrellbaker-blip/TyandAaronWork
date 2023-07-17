@@ -1,11 +1,13 @@
 import os
+import random
+
 from dotenv import load_dotenv
 import sqlite3
 from discord.ext import commands
 import discord
 
 load_dotenv()
-TOKEN = os.getenv('TY_TOKEN')
+TOKEN = os.getenv('DISCORD_TOKEN')
 
 bot = commands.Bot(command_prefix='!', intents=discord.Intents.all())
 bot.db_conn = sqlite3.connect("mymatchmaking.db")
@@ -46,12 +48,28 @@ async def view_registered(ctx):
 @bot.command(name='points')
 async def points(ctx, username: str):
     bot.db_curs.execute("SELECT points FROM users WHERE username=?", (username,))
-    user = self.bot.db_curs.fetchone()
+    user = bot.db_curs.fetchone()
 
     if user is None:
         await ctx.send("User not registered.")
     else:
         await ctx.send(f"{username} has {user[1]} points.")
+@bot.command(name= 'newmatchup')
+async def newmatchup(ctx):
+    bot.db_curs.execute("SELECT username FROM users")
+    allusers = [row[0]for row in bot.db_curs.fetchall()]
+    if len(allusers)< 2:
+        await ctx.send("There aren't enough users for a match.")
+        return
+    user_1, user_2 = random.sample(allusers, 2)
 
 
-bot.run(TOKEN)
+    print(f'Matchup: {user_1} vs {user_2}')
+    await ctx.send(f'Matchup: {user_1} vs {user_2}')
+
+def main():
+    bot.run(TOKEN)
+
+
+if __name__ == '__main__':
+    main()
