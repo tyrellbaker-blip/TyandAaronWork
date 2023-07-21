@@ -1,5 +1,6 @@
 import os
 import random
+import time
 
 from dotenv import load_dotenv
 import sqlite3
@@ -17,7 +18,8 @@ bot.db_curs = bot.db_conn.cursor()
 @bot.event
 async def on_ready():
     print(f'{bot.user} has connected to Discord!')
-    bot.db_curs.execute("CREATE TABLE IF NOT EXISTS users (username TEXT, points INTEGER)")
+    bot.db_curs.execute("CREATE TABLE IF NOT EXISTS users (username TEXT, points INTEGER, consecutive_misses INTEGER)")
+
 
 
 
@@ -66,6 +68,75 @@ async def newmatchup(ctx):
 
     print(f'Matchup: {user_1} vs {user_2}')
     await ctx.send(f'Matchup: {user_1} vs {user_2}')
+
+
+def owner_mediation(ctx, opponent, outcome):
+    pass
+
+
+def update_points_and_notify(ctx, user_id, points):
+    bot.db_curs.execute('UPDATE users SET points = points + ? WHERE user_id=?', (points, user_id))
+    bot.db_conn.commit()
+    bot.db_curs.execute('SELECT points FROM users WHERE user_id=?', (user_id))
+    update_points = bot.db_curs.fetchone()[0]
+    await ctx.send(f'Your points have been updated. You now have {update_points}.')
+
+
+def kick_inactive_users(ctx, winner, loser):
+    pass
+
+
+def remind_player_to_submit_report(ctx, winner, loser, winner_consecutive_misses, loser_consecutive_misses):
+    pass
+
+
+@bot.command(name= 'confirm')
+async def confirm(ctx, opponent: discord.Member, outcome: str):
+    if outcome not in ['win', 'lose']:
+        await ctx.send('Invalid response: Please enter win or lose.')
+        return
+
+    report = bot.match_reports.git(opponent.id)
+    if report and report['opponent'] == ctx.message.author.id and report['outcome'] != outcome:
+        await owner_mediation(ctx, opponent, outcome)
+        return
+
+    elif report and report['opponent'] == ctx.message.author.id and report['outcome'] == outcome:
+        winner = ctx.message.author
+        loser = opponent
+        if outcome == 'lose':
+            winner, loser = opponent, ctx.message.author
+        await update_points_and_notify(ctx, winner, loser)
+
+    else:
+        await ctx.send('No such match exists.')
+
+    bot.db_curs.execute("SELECT consecutive_misses FROM users WHERE discord_id=? ", (winner.id, ))
+    winner_consecutive_misses = bot.db_curs.fetchone()[0]
+    bot.db_curs.execute("SELECT consecutive_misses FROM users WHERE discord_id=? ", (loser.id,))
+    loser_consecutive_misses = bot.db_curs.fetchone()[0]
+    await kick_inactive_users(ctx, winner, loser)
+    await remind_player_to_submit_report(ctx, winner, loser, winner_consecutive_misses, loser_consecutive_misses)
+@bot.command(name= 'checkmisseddeadlines')
+@commands.is_owner()
+async def check_missed_deadlines(ctx):
+    while True:
+        current_time = time.time()
+        for user_id, report in bot.match_reports.items():
+            if current_time-report['created'] >= 2 * 24 * 60 * 60:
+                bot.db_curs.execute("SELECT consecutive_misses FROM users WHERE discord_id=?", (user_id,))
+                misses = bot.db_curs.fetchone()[0]
+
+                if misses >= 8:
+                    bot.db_curs.execute("DELETE FROM users WHERE discord_id=?", (user_id,))
+                    bot.db_conn.commit()
+                    await ctx.send(f'{bot.get_user(user_id)} has been removed from the server due to inactivity.')
+                    continue
+
+                bot.db_curs.execute('UPDATE users SET consecutive_misses = consecutive_misses + 1 WHERE discord_id=?', (user_id,))
+                bot.db_conn.commit()
+                update_points_and_notify(user_id, -5)
+
 
 def main():
     bot.run(TOKEN)
