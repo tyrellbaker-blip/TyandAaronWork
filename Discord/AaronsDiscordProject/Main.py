@@ -74,10 +74,10 @@ def owner_mediation(ctx, opponent, outcome):
     pass
 
 
-def update_points_and_notify(ctx, user_id, points):
-    bot.db_curs.execute('UPDATE users SET points = points + ? WHERE user_id=?', (points, user_id))
+async def update_points_and_notify(ctx, discord_id, points):
+    bot.db_curs.execute('UPDATE users SET points = points + ? WHERE discord_id=?', (points, discord_id))
     bot.db_conn.commit()
-    bot.db_curs.execute('SELECT points FROM users WHERE user_id=?', (user_id))
+    bot.db_curs.execute('SELECT points FROM users WHERE discord_id=?', (discord_id))
     update_points = bot.db_curs.fetchone()[0]
     await ctx.send(f'Your points have been updated. You now have {update_points}.')
 
@@ -89,6 +89,11 @@ def kick_inactive_users(ctx, winner, loser):
 def remind_player_to_submit_report(ctx, winner, loser, winner_consecutive_misses, loser_consecutive_misses):
     pass
 
+def handle_losing_streak(ctx, discord_id, outcome):
+    bot.db_curs.execute('SELECT points, consecutive_misses FROM users WHERE discord_id=?', (discord_id))
+    user_info = bot.db_curs.fetchone()
+    points, consecutive_misses = user_info
+
 
 @bot.command(name= 'confirm')
 async def confirm(ctx, opponent: discord.Member, outcome: str):
@@ -96,51 +101,45 @@ async def confirm(ctx, opponent: discord.Member, outcome: str):
         await ctx.send('Invalid response: Please enter win or lose.')
         return
 
-    report = bot.match_reports.git(opponent.id)
-    if report and report['opponent'] == ctx.message.author.id and report['outcome'] != outcome:
-        await owner_mediation(ctx, opponent, outcome)
+    report = bot.match_reports.get(str(opponent.id))
+    if report and report['opponent'] == str(ctx.message.author.id) and report['outcome'] != outcome:
+        await owner_mediation(ctx, ctx.message.author, opponent, outcome)
         return
 
-    elif report and report['opponent'] == ctx.message.author.id and report['outcome'] == outcome:
-        winner = ctx.message.author
-        loser = opponent
-        if outcome == 'lose':
-            winner, loser = opponent, ctx.message.author
-        await update_points_and_notify(ctx, winner, loser)
+    winner, loser = (str(ctx.message.author.id), str(opponent.id)) if outcome == 'win' else (str(opponent.id), str(ctx.message.author.id))
 
+    bot.db_curs.execute('SELECT consecutive_losses FROM users WHERE discord_id=?', (loser,))
+    loser_consecutive_losses = bot.db_curs.fetchone()[0]
+    if loser_consecutive_losses >= 5:
+        change_points(winner, 40)
     else:
-        await ctx.send('No such match exists.')
+        change_points(winner, 23)
+    change_points(loser, -15)
 
-    bot.db_curs.execute("SELECT consecutive_misses FROM users WHERE discord_id=? ", (winner.id, ))
-    winner_consecutive_misses = bot.db_curs.fetchone()[0]
-    bot.db_curs.execute("SELECT consecutive_misses FROM users WHERE discord_id=? ", (loser.id,))
-    loser_consecutive_misses = bot.db_curs.fetchone()[0]
-    await kick_inactive_users(ctx, winner, loser)
-    await remind_player_to_submit_report(ctx, winner, loser, winner_consecutive_misses, loser_consecutive_misses)
-@bot.command(name= 'checkmisseddeadlines')
+    bot.db_curs.execute('UPDATE users SET consecutive_losses = consecutive_losses + 1 WHERE discord_id=?', (loser,))
+    bot.db_curs.execute('UPDATE users SET consecutive_losses = 0 WHERE discord_id=?', (winner,))
+
+@bot.command(name='checkmisseddeadlines')
 @commands.is_owner()
 async def check_missed_deadlines(ctx):
-    while True:
-        current_time = time.time()
-        for user_id, report in bot.match_reports.items():
-            if current_time-report['created'] >= 2 * 24 * 60 * 60:
-                bot.db_curs.execute("SELECT consecutive_misses FROM users WHERE discord_id=?", (user_id,))
-                misses = bot.db_curs.fetchone()[0]
+    current_time = time.time()
+    for user_id, report in bot.match_reports.items():
+        if current_time - report['created'] >= 2 * 24 * 60 * 60:
+            bot.db_curs.execute('SELECT consecutive_misses FROM users WHERE discord_id=?', (user_id,))
+            misses = bot.db_curs.fetchone()[0]
 
-                if misses >= 8:
-                    bot.db_curs.execute("DELETE FROM users WHERE discord_id=?", (user_id,))
-                    bot.db_conn.commit()
-                    await ctx.send(f'{bot.get_user(user_id)} has been removed from the server due to inactivity.')
-                    continue
-
-                bot.db_curs.execute('UPDATE users SET consecutive_misses = consecutive_misses + 1 WHERE discord_id=?', (user_id,))
+            if misses >= 8:
+                bot.db_curs.execute('DELETE FROM users WHERE discord_id=?', (user_id,))
                 bot.db_conn.commit()
-                update_points_and_notify(user_id, -5)
+                await ctx.send(f'{bot.get_user(int(user_id))} has been removed from the server due to inactivity.')
+                continue
 
+            bot.db_curs.execute('UPDATE users SET consecutive_misses = consecutive_misses + 1 WHERE discord_id=?', (user_id,))
+            bot.db_conn.commit()
+            change_points(user_id, -5)
 
 def main():
     bot.run(TOKEN)
-
 
 if __name__ == '__main__':
     main()
